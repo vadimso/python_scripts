@@ -1,4 +1,6 @@
 #!/usr/bin/python3.6
+# run apt install libcurl4-openssl-dev libssl-dev
+# run pip3 install pycurl
 import pycurl
 from io import BytesIO
 
