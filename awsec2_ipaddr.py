@@ -1,6 +1,7 @@
 #!/usr/bin/python3.6
 # run apt install libcurl4-openssl-dev libssl-dev
 # run pip3 install pycurl
+# display ip external ip address on aws ec2 instance
 import pycurl
 from io import BytesIO
 
