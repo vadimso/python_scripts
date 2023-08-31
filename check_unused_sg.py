@@ -1,0 +1,72 @@
+# need to install boto3,argparse, json modules
+# tested with python3.10 version and pip23.0.1 version with python venv
+# this script will empty and not used security groups
+
+import argparse
+import json
+import boto3
+
+ec2 = boto3.resource('ec2')
+
+def list_security_groups() -> list:
+    groups = ec2.security_groups.all()
+    return list(groups)
+
+def list_network_interfaces() -> list:
+    interfaces = ec2.network_interfaces.all()
+    return list(interfaces)
+
+def extract_unused_security_groups() -> list:
+    groups = list_security_groups()
+    interfaces = list_network_interfaces()
+    used_groups = [group for interface in interfaces for group in interface.groups]
+    unused_groups = []
+
+    for group in groups:
+        if group.group_id in [used_group.get('GroupId') for used_group in used_groups]:
+            # Used by network interfaces.
+            continue
+
+        if group.group_id in [pair.get('GroupId') for group in groups
+                               for permission in group.ip_permissions
+                               for pair in permission.get('UserIdGroupPairs', [])]:
+            # Used by other security groups
+            continue
+
+        unused_groups.append(group)
+    return unused_groups
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--include-inbound', action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument('--include-outbound', action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument('--output', choices=['json', 'list'], default='json')
+    return parser.parse_args()
+
+def format_print(unused_groups: list, include_inbound: bool, include_outbound: bool, output: str):
+    results = []
+
+    for unused_group in unused_groups:
+        result = {
+            'group_id': unused_group.group_id,
+            'group_name': unused_group.group_name,
+        }
+        if include_inbound:
+            result.update({'ip_permissions': unused_group.ip_permissions})
+        if include_outbound:
+            result.update({'ip_permissions_egress': unused_group.ip_permissions_egress})
+        results.append(result)
+
+    if output == 'json':
+        print(json.dumps(results, indent=2))
+    elif output == 'list':
+        _ = [f"- {result.get('group_name')} ({result.get('group_id')})\n" for result in results]
+        print(''.join(_), end='')
+
+def main():
+    unused_groups = extract_unused_security_groups()
+    args = parse_args()
+    format_print(unused_groups, args.include_inbound, args.include_outbound, args.output)
+
+if __name__ == '__main__':
+    main()
